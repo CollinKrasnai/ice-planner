@@ -28,7 +28,6 @@
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans flex items-center justify-center min-h-screen p-4 transition-colors duration-300">
 
-    <!-- Main application web component -->
     <ice-planner></ice-planner>
 
     <script type="module">
@@ -75,13 +74,21 @@
                 // Check if it's a currency input to show a '$'
                 if (this.hasAttribute('currency')) {
                     currencySpan.textContent = '$';
+                } else if (this.getAttribute('name') === 'feePercentage') { // Specific for percentage
+                    currencySpan.textContent = '#'; // Use # for percentage input, as the % is outside
                 } else {
                     currencySpan.textContent = '#';
                 }
 
-                // When someone types in the box, we need to tell the main app.
+                // *** FIX: Properly forward 'input' and 'change' events ***
+                // This lets the main <ice-planner> component know when a value has been typed or committed.
+                // 'composed: true' allows the event to bubble out of the Shadow DOM.
                 inputEl.addEventListener('input', (e) => {
-                    this.dispatchEvent(new CustomEvent('change', { detail: { value: e.target.value }}));
+                    this.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                });
+                
+                inputEl.addEventListener('change', (e) => {
+                    this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
                 });
             }
 
@@ -103,26 +110,21 @@
         var icePlannerTemplate = document.createElement('template');
         icePlannerTemplate.innerHTML = `
             <div class="w-full max-w-4xl mx-auto bg-white dark:bg-slate-800 shadow-2xl rounded-2xl p-6 md:p-8">
-                <!-- Header -->
                 <header class="flex justify-between items-center mb-6">
                     <div class="flex items-center space-x-3">
                          <svg class="w-10 h-10 text-sky-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
-                        </svg>
+                             <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
+                         </svg>
                         <h1 class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100">Ice Planner</h1>
                     </div>
                     <button id="theme-toggle" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition">
-                        <!-- Sun Icon -->
                         <svg id="sun-icon" class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.95-4.243l-1.59-1.59M3 12h2.25m.386-6.364l1.59 1.59" /></svg>
-                        <!-- Moon Icon -->
                         <svg id="moon-icon" class="w-6 h-6 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>
                     </button>
                 </header>
 
-                <!-- Form Inputs -->
                 <form id="cost-form" class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                     
-                    <!-- Left Column -->
                     <div class="space-y-6">
                         <fieldset class="p-4 border dark:border-slate-600 rounded-lg">
                             <legend class="px-2 font-semibold text-sky-600 dark:text-sky-400">Team Info</legend>
@@ -163,7 +165,6 @@
                         </fieldset>
                     </div>
 
-                    <!-- Right Column (Outputs) -->
                     <div class="space-y-6">
                         <div class="bg-slate-100 dark:bg-slate-900/50 p-6 rounded-lg space-y-4">
                             <h2 class="text-xl font-semibold border-b border-slate-300 dark:border-slate-600 pb-2">Results</h2>
@@ -190,7 +191,7 @@
 
                          <div class="flex items-center justify-end space-x-4 pt-4">
                             <button type="button" id="reset-button" class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm transition">Reset Form</button>
-                        </div>
+                         </div>
                     </div>
 
                 </form>
@@ -240,7 +241,13 @@
                 var values = {};
                 // Go through each input and get its current value.
                 this.allInputs.forEach(function(input) {
-                    values[input.name] = input.value || 0;
+                    // *** FIX: Use getAttribute('name') to read the name attribute ***
+                    // *** from both native <input> and custom <number-input> elements. ***
+                    // *** 'input.name' only works for native form elements. ***
+                    const name = input.getAttribute('name');
+                    if (name) {
+                        values[name] = input.value || 0;
+                    }
                 });
                 
                 // I'm using parseFloat to turn the text from the input boxes into real numbers.
@@ -277,7 +284,11 @@
             saveState() {
                 var state = {};
                 this.allInputs.forEach(function(input) {
-                    state[input.name] = input.value;
+                    // *** FIX: Use getAttribute('name') here as well. ***
+                    const name = input.getAttribute('name');
+                    if (name) {
+                        state[name] = input.value;
+                    }
                 });
                 localStorage.setItem('icePlannerState', JSON.stringify(state));
             }
@@ -298,8 +309,10 @@
                 
                 if (state) {
                     this.allInputs.forEach(function(input) {
-                        if (state[input.name]) {
-                            input.value = state[input.name];
+                        // *** FIX: Use getAttribute('name') here too. ***
+                        const name = input.getAttribute('name');
+                        if (name && state[name]) {
+                            input.value = state[name];
                         }
                     });
                 }
@@ -309,9 +322,12 @@
 
             // Clears the form and any saved data.
             resetState() {
-                this.form.reset();
+                // this.form.reset() doesn't work well with custom elements.
+                // Manually clear all inputs.
                 this.allInputs.forEach(function(input) { input.value = ''; });
+                
                 localStorage.removeItem('icePlannerState');
+                // Clear the URL query string
                 window.history.pushState({}, '', window.location.pathname);
                 this.calculate();
             }
@@ -320,8 +336,10 @@
             generateShareURL() {
                 var params = new URLSearchParams();
                 this.allInputs.forEach(function(input) {
-                    if(input.value) {
-                         params.set(input.name, input.value);
+                    // *** FIX: Use getAttribute('name') for the final time. ***
+                    const name = input.getAttribute('name');
+                    if(name && input.value) {
+                        params.set(name, input.value);
                     }
                 });
                 var shareableURL = window.location.origin + window.location.pathname + '?' + params.toString();
@@ -329,15 +347,31 @@
             }
             
             // Copies the share URL to the clipboard.
-            copyURL() {
-                this.shareUrlEl.select();
-                document.execCommand('copy');
-                
-                var feedback = this.shadowRoot.querySelector('#copy-feedback');
-                feedback.style.opacity = '1';
-                setTimeout(function() {
-                    feedback.style.opacity = '0';
-                }, 2000);
+            async copyURL() { // *** FIX: Made async and using modern clipboard API ***
+                const urlToCopy = this.shareUrlEl.value;
+                if (!urlToCopy) return;
+
+                try {
+                    await navigator.clipboard.writeText(urlToCopy);
+                    
+                    // Show feedback
+                    var feedback = this.shadowRoot.querySelector('#copy-feedback');
+                    feedback.textContent = 'Copied!';
+                    feedback.style.opacity = '1';
+                    setTimeout(function() {
+                        feedback.style.opacity = '0';
+                    }, 2000);
+
+                } catch (err) {
+                    console.error('Failed to copy URL: ', err);
+                    // Show error feedback
+                    var feedback = this.shadowRoot.querySelector('#copy-feedback');
+                    feedback.textContent = 'Failed!';
+                    feedback.style.opacity = '1';
+                    setTimeout(function() {
+                        feedback.style.opacity = '0';
+                    }, 2000);
+                }
             }
             
             // Toggles between light and dark mode.
@@ -378,4 +412,3 @@
     </script>
 </body>
 </html>
-
